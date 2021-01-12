@@ -1,0 +1,62 @@
+{
+  "target": "bmv2",
+  "p4info": "build/load_balance.p4.p4info.txt",
+  "bmv2_json": "build/load_balance.json",
+  "table_entries": [
+    {
+      "table": "MyIngress.switch_config_params",
+      "action_name": "MyIngress.set_config_parameters",
+      "action_params": {
+        "swid": 1
+      }
+    },
+    {
+      "table": "MyIngress.tag_id_exact",
+      "match": {
+        "meta.tag_id": [0]
+      },
+      "action_name": "MyIngress.tag_forward",
+      "action_params": {
+        "port": 2
+      }
+    },
+    {
+      "table": "MyIngress.tag_id_exact",
+      "match": {
+        "meta.tag_id": [1]
+      },
+      "action_name": "MyIngress.tag_forward",
+      "action_params": {
+        "port": 2
+      }
+    },
+    {
+      "table": "MyIngress.ipv4_lpm",
+      "default_action": true,
+      "action_name": "MyIngress.drop",
+      "action_params": { }
+    },
+    {
+      "table": "MyIngress.ipv4_lpm",
+      "match": {
+        "hdr.ipv4.dstAddr": ["10.0.1.1", 32]
+      },
+      "action_name": "MyIngress.ipv4_forward",
+      "action_params": {
+        "dstAddr": "08:00:00:00:01:01",
+        "port": 1
+      }
+    },
+    {
+      "table": "MyIngress.ipv4_lpm",
+      "match": {
+        "hdr.ipv4.dstAddr": ["10.0.2.2", 32]
+      },
+      "action_name": "MyIngress.ipv4_forward",
+      "action_params": {
+        "dstAddr": "08:00:00:00:02:00",
+        "port": 2
+      }
+    }
+  ]
+}
