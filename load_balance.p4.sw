@@ -58,6 +58,7 @@ header wecmp_t{
 
 struct metadata {
     bit<8> tag_id;
+    bit<8> position;
     bit<8> output_tag_id;
 }
 
@@ -122,8 +123,9 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t standard_metadata) {
     
     /* config */
-    action set_config_parameters(bit<8> tag_id) {
-        meta.tag_id = tag_id;
+    action set_config_parameters(bit<8> id, bit<8> position) {
+        meta.tag_id = id;
+        meta.position = position;
     }
     table switch_config_params {
         actions = {
@@ -171,17 +173,67 @@ control MyIngress(inout headers hdr,
         default_action = drop();
     }
 
+    action get_path_id(){
+        // get path id
+        bit<8> output_id;
+        output_id = hdr.wecmp.selected_path_id;
+        output_id = output_id >> 1;
+        output_id = output_id & 1;
+        meta.output_tag_id = output_id;
+    }
+
+    /*action tor_forward(port){
+        standard_metadata.egress_spec = port;
+    }
+
+    action path_forward(port){
+        // get path id
+        bit<8> output_id;
+        output_id = hdr.wecmp.selected_path_id;
+        output_id = output_id >> 1;
+        output_id = output_id & 1;
+        meta.output_tag_id = output_id;
+        output_tag_id_exact.apply();
+    }
+
+    table dir_tag_exact{
+        key = {
+            meta.tag_id: exact;
+            hdr.wecmp.src_sw_id: exact;
+        }
+        actions = {
+            drop;
+            path_forward;
+            tor_forward;
+        }
+        size = 1024;
+        default_action = drop();
+    }*/
+
     apply {
         // configure
         switch_config_params.apply();
 
         if(hdr.wecmp.isValid()){
-            // get path id
-            bit<8> output_id;
-            output_id = hdr.wecmp.selected_path_id >> 1;
-            output_id = output_id & 1;
-            meta.output_tag_id = output_id;
-            output_tag_id_exact.apply();
+            // sent to TOR
+            if(meta.position == 2){
+                if(hdr.wecmp.src_sw_id == 1){
+                    standard_metadata.egress_spec = 3;
+                }
+                else{
+                    get_path_id();
+                    output_tag_id_exact.apply();
+                }
+            }
+            else if(meta.position == 1){
+                if(hdr.wecmp.src_sw_id == 2){
+                    standard_metadata.egress_spec = 3;
+                }
+                else{
+                    get_path_id();
+                    output_tag_id_exact.apply();
+                }
+            }
         }
         else if (hdr.ipv4.isValid()) {
             ipv4_lpm.apply();
@@ -232,6 +284,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
+        packet.emit(hdr.wecmp);
         packet.emit(hdr.ipv4);
         packet.emit(hdr.tcp);
     }

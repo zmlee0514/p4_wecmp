@@ -8,11 +8,17 @@
                            "arp -i eth0 -s 10.0.2.20 08:00:00:00:02:00"]}
     },
     "switches": {
-        "stor1": { "runtime_json" : "tor1-runtime.json" },
-        "stor2": { "runtime_json" : "tor2-runtime.json" }
+        "stor1": { },
+        "stor2": { },
+        "s1": { },
+        "s2": { },
+        "s3": { },
+        "s4": { }
     },
     "links": [
-        ["h1", "stor1-p1"], ["stor1-p2", "stor2-p2"], ["h2", "stor2-p1"]
+        ["h1", "stor1-p3"], ["stor1-p1", "s1-p3"], ["stor1-p2", "s2-p3"],
+        ["h2", "stor2-p3"], ["stor2-p1", "s3-p3"], ["stor2-p2", "s4-p3"],
+        ["s1-p1", "s3-p1"], ["s1-p2", "s4-p1"], 
+        ["s2-p1", "s3-p2"], ["s2-p2", "s4-p2"]
     ]
 }
-
