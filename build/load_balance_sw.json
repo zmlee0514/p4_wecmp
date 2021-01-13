@@ -4,8 +4,8 @@
       "name" : "scalars_0",
       "id" : 0,
       "fields" : [
-        ["metadata.ecmp_select", 14, false],
-        ["_padding_0", 2, false]
+        ["metadata.tag_id", 8, false],
+        ["metadata.output_tag_id", 8, false]
       ]
     },
     {
@@ -79,6 +79,16 @@
         ["checksum", 16, false],
         ["urgentPtr", 16, false]
       ]
+    },
+    {
+      "name" : "wecmp_t",
+      "id" : 5,
+      "fields" : [
+        ["src_sw_id", 8, false],
+        ["selected_path_id", 8, false],
+        ["tag_path_id", 8, false],
+        ["max_utilization", 8, false]
+      ]
     }
   ],
   "headers" : [
@@ -114,6 +124,13 @@
       "name" : "tcp",
       "id" : 4,
       "header_type" : "tcp_t",
+      "metadata" : false,
+      "pi_omit" : true
+    },
+    {
+      "name" : "wecmp",
+      "id" : 5,
+      "header_type" : "wecmp_t",
       "metadata" : false,
       "pi_omit" : true
     }
@@ -161,6 +178,12 @@
               "next_state" : "parse_ipv4"
             },
             {
+              "type" : "hexstr",
+              "value" : "0x1234",
+              "mask" : null,
+              "next_state" : "parse_wecmp"
+            },
+            {
               "value" : "default",
               "mask" : null,
               "next_state" : null
@@ -174,8 +197,31 @@
           ]
         },
         {
-          "name" : "parse_ipv4",
+          "name" : "parse_wecmp",
           "id" : 1,
+          "parser_ops" : [
+            {
+              "parameters" : [
+                {
+                  "type" : "regular",
+                  "value" : "wecmp"
+                }
+              ],
+              "op" : "extract"
+            }
+          ],
+          "transitions" : [
+            {
+              "value" : "default",
+              "mask" : null,
+              "next_state" : "parse_ipv4"
+            }
+          ],
+          "transition_key" : []
+        },
+        {
+          "name" : "parse_ipv4",
+          "id" : 2,
           "parser_ops" : [
             {
               "parameters" : [
@@ -209,7 +255,7 @@
         },
         {
           "name" : "parse_tcp",
-          "id" : 2,
+          "id" : 3,
           "parser_ops" : [
             {
               "parameters" : [
@@ -240,7 +286,7 @@
       "id" : 0,
       "source_info" : {
         "filename" : "load_balance.p4.sw",
-        "line" : 206,
+        "line" : 232,
         "column" : 8,
         "source_fragment" : "MyDeparser"
       },
@@ -254,36 +300,9 @@
     {
       "name" : "calc",
       "id" : 0,
-      "algo" : "crc16",
-      "input" : [
-        {
-          "type" : "field",
-          "value" : ["ipv4", "srcAddr"]
-        },
-        {
-          "type" : "field",
-          "value" : ["ipv4", "dstAddr"]
-        },
-        {
-          "type" : "field",
-          "value" : ["ipv4", "protocol"]
-        },
-        {
-          "type" : "field",
-          "value" : ["tcp", "srcPort"]
-        },
-        {
-          "type" : "field",
-          "value" : ["tcp", "dstPort"]
-        }
-      ]
-    },
-    {
-      "name" : "calc_0",
-      "id" : 1,
       "source_info" : {
         "filename" : "load_balance.p4.sw",
-        "line" : 184,
+        "line" : 210,
         "column" : 1,
         "source_fragment" : "update_checksum( ..."
       },
@@ -351,23 +370,32 @@
       "primitives" : []
     },
     {
-      "name" : "MyIngress.drop",
+      "name" : "MyIngress.set_config_parameters",
       "id" : 2,
-      "runtime_data" : [],
+      "runtime_data" : [
+        {
+          "name" : "tag_id",
+          "bitwidth" : 8
+        }
+      ],
       "primitives" : [
         {
-          "op" : "mark_to_drop",
+          "op" : "assign",
           "parameters" : [
             {
-              "type" : "header",
-              "value" : "standard_metadata"
+              "type" : "field",
+              "value" : ["scalars", "metadata.tag_id"]
+            },
+            {
+              "type" : "runtime_data",
+              "value" : 0
             }
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 102,
+            "line" : 126,
             "column" : 8,
-            "source_fragment" : "mark_to_drop(standard_metadata)"
+            "source_fragment" : "meta.tag_id = tag_id"
           }
         }
       ]
@@ -387,7 +415,7 @@
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 102,
+            "line" : 137,
             "column" : 8,
             "source_fragment" : "mark_to_drop(standard_metadata)"
           }
@@ -395,33 +423,47 @@
       ]
     },
     {
-      "name" : "MyIngress.set_ecmp_select",
+      "name" : "MyIngress.drop",
       "id" : 4,
+      "runtime_data" : [],
+      "primitives" : [
+        {
+          "op" : "mark_to_drop",
+          "parameters" : [
+            {
+              "type" : "header",
+              "value" : "standard_metadata"
+            }
+          ],
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 137,
+            "column" : 8,
+            "source_fragment" : "mark_to_drop(standard_metadata)"
+          }
+        }
+      ]
+    },
+    {
+      "name" : "MyIngress.ipv4_forward",
+      "id" : 5,
       "runtime_data" : [
         {
-          "name" : "ecmp_base",
-          "bitwidth" : 16
+          "name" : "dstAddr",
+          "bitwidth" : 48
         },
         {
-          "name" : "ecmp_count",
-          "bitwidth" : 32
+          "name" : "port",
+          "bitwidth" : 9
         }
       ],
       "primitives" : [
         {
-          "op" : "modify_field_with_hash_based_offset",
+          "op" : "assign",
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["scalars", "metadata.ecmp_select"]
-            },
-            {
-              "type" : "runtime_data",
-              "value" : 0
-            },
-            {
-              "type" : "calculation",
-              "value" : "calc"
+              "value" : ["standard_metadata", "egress_spec"]
             },
             {
               "type" : "runtime_data",
@@ -430,31 +472,30 @@
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 105,
+            "line" : 140,
             "column" : 8,
-            "source_fragment" : "hash(meta.ecmp_select, ..."
+            "source_fragment" : "standard_metadata.egress_spec = port"
           }
-        }
-      ]
-    },
-    {
-      "name" : "MyIngress.set_nhop",
-      "id" : 5,
-      "runtime_data" : [
-        {
-          "name" : "nhop_dmac",
-          "bitwidth" : 48
         },
         {
-          "name" : "nhop_ipv4",
-          "bitwidth" : 32
+          "op" : "assign",
+          "parameters" : [
+            {
+              "type" : "field",
+              "value" : ["ethernet", "srcAddr"]
+            },
+            {
+              "type" : "field",
+              "value" : ["ethernet", "dstAddr"]
+            }
+          ],
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 141,
+            "column" : 8,
+            "source_fragment" : "hdr.ethernet.srcAddr = hdr.ethernet.dstAddr"
+          }
         },
-        {
-          "name" : "port",
-          "bitwidth" : 9
-        }
-      ],
-      "primitives" : [
         {
           "op" : "assign",
           "parameters" : [
@@ -469,47 +510,9 @@
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 116,
+            "line" : 142,
             "column" : 8,
-            "source_fragment" : "hdr.ethernet.dstAddr = nhop_dmac"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["ipv4", "dstAddr"]
-            },
-            {
-              "type" : "runtime_data",
-              "value" : 1
-            }
-          ],
-          "source_info" : {
-            "filename" : "load_balance.p4.sw",
-            "line" : 117,
-            "column" : 8,
-            "source_fragment" : "hdr.ipv4.dstAddr = nhop_ipv4"
-          }
-        },
-        {
-          "op" : "assign",
-          "parameters" : [
-            {
-              "type" : "field",
-              "value" : ["standard_metadata", "egress_spec"]
-            },
-            {
-              "type" : "runtime_data",
-              "value" : 2
-            }
-          ],
-          "source_info" : {
-            "filename" : "load_balance.p4.sw",
-            "line" : 118,
-            "column" : 8,
-            "source_fragment" : "standard_metadata.egress_spec = port"
+            "source_fragment" : "hdr.ethernet.dstAddr = dstAddr"
           }
         },
         {
@@ -549,7 +552,7 @@
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 119,
+            "line" : 143,
             "column" : 8,
             "source_fragment" : "hdr.ipv4.ttl = hdr.ipv4.ttl - 1"
           }
@@ -557,18 +560,12 @@
       ]
     },
     {
-      "name" : "NoAction",
+      "name" : "MyIngress.tag_forward",
       "id" : 6,
-      "runtime_data" : [],
-      "primitives" : []
-    },
-    {
-      "name" : "MyEgress.rewrite_mac",
-      "id" : 7,
       "runtime_data" : [
         {
-          "name" : "smac",
-          "bitwidth" : 48
+          "name" : "port",
+          "bitwidth" : 9
         }
       ],
       "primitives" : [
@@ -577,7 +574,7 @@
           "parameters" : [
             {
               "type" : "field",
-              "value" : ["ethernet", "srcAddr"]
+              "value" : ["standard_metadata", "egress_spec"]
             },
             {
               "type" : "runtime_data",
@@ -586,31 +583,68 @@
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 158,
+            "line" : 160,
             "column" : 8,
-            "source_fragment" : "hdr.ethernet.srcAddr = smac"
+            "source_fragment" : "standard_metadata.egress_spec = port"
           }
         }
       ]
     },
     {
-      "name" : "MyEgress.drop",
-      "id" : 8,
+      "name" : "act",
+      "id" : 7,
       "runtime_data" : [],
       "primitives" : [
         {
-          "op" : "mark_to_drop",
+          "op" : "assign",
           "parameters" : [
             {
-              "type" : "header",
-              "value" : "standard_metadata"
+              "type" : "field",
+              "value" : ["scalars", "metadata.output_tag_id"]
+            },
+            {
+              "type" : "expression",
+              "value" : {
+                "type" : "expression",
+                "value" : {
+                  "op" : "&",
+                  "left" : {
+                    "type" : "expression",
+                    "value" : {
+                      "op" : "&",
+                      "left" : {
+                        "type" : "expression",
+                        "value" : {
+                          "op" : ">>",
+                          "left" : {
+                            "type" : "field",
+                            "value" : ["wecmp", "selected_path_id"]
+                          },
+                          "right" : {
+                            "type" : "hexstr",
+                            "value" : "0x1"
+                          }
+                        }
+                      },
+                      "right" : {
+                        "type" : "hexstr",
+                        "value" : "0xff"
+                      }
+                    }
+                  },
+                  "right" : {
+                    "type" : "hexstr",
+                    "value" : "0x01"
+                  }
+                }
+              }
             }
           ],
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 161,
-            "column" : 8,
-            "source_fragment" : "mark_to_drop(standard_metadata)"
+            "line" : 182,
+            "column" : 24,
+            "source_fragment" : "output_id & 1; ..."
           }
         }
       ]
@@ -622,20 +656,116 @@
       "id" : 0,
       "source_info" : {
         "filename" : "load_balance.p4.sw",
-        "line" : 98,
+        "line" : 120,
         "column" : 8,
         "source_fragment" : "MyIngress"
       },
-      "init_table" : "node_2",
+      "init_table" : "MyIngress.switch_config_params",
       "tables" : [
         {
-          "name" : "MyIngress.ecmp_group",
+          "name" : "MyIngress.switch_config_params",
           "id" : 0,
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 121,
+            "line" : 128,
             "column" : 10,
-            "source_fragment" : "ecmp_group"
+            "source_fragment" : "switch_config_params"
+          },
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [2, 0],
+          "actions" : ["MyIngress.set_config_parameters", "NoAction"],
+          "base_default_next" : "node_3",
+          "next_tables" : {
+            "MyIngress.set_config_parameters" : "node_3",
+            "NoAction" : "node_3"
+          },
+          "default_entry" : {
+            "action_id" : 0,
+            "action_const" : false,
+            "action_data" : [],
+            "action_entry_const" : false
+          }
+        },
+        {
+          "name" : "tbl_act",
+          "id" : 1,
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 183,
+            "column" : 31,
+            "source_fragment" : "="
+          },
+          "key" : [],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [7],
+          "actions" : ["act"],
+          "base_default_next" : "MyIngress.output_tag_id_exact",
+          "next_tables" : {
+            "act" : "MyIngress.output_tag_id_exact"
+          },
+          "default_entry" : {
+            "action_id" : 7,
+            "action_const" : true,
+            "action_data" : [],
+            "action_entry_const" : true
+          }
+        },
+        {
+          "name" : "MyIngress.output_tag_id_exact",
+          "id" : 2,
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 162,
+            "column" : 10,
+            "source_fragment" : "output_tag_id_exact"
+          },
+          "key" : [
+            {
+              "match_type" : "exact",
+              "name" : "meta.output_tag_id",
+              "target" : ["scalars", "metadata.output_tag_id"],
+              "mask" : null
+            }
+          ],
+          "match_type" : "exact",
+          "type" : "simple",
+          "max_size" : 1024,
+          "with_counters" : false,
+          "support_timeout" : false,
+          "direct_meters" : null,
+          "action_ids" : [4, 6],
+          "actions" : ["MyIngress.drop", "MyIngress.tag_forward"],
+          "base_default_next" : null,
+          "next_tables" : {
+            "MyIngress.drop" : null,
+            "MyIngress.tag_forward" : null
+          },
+          "default_entry" : {
+            "action_id" : 4,
+            "action_const" : false,
+            "action_data" : [],
+            "action_entry_const" : false
+          }
+        },
+        {
+          "name" : "MyIngress.ipv4_lpm",
+          "id" : 3,
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 145,
+            "column" : 10,
+            "source_fragment" : "ipv4_lpm"
           },
           "key" : [
             {
@@ -651,54 +781,16 @@
           "with_counters" : false,
           "support_timeout" : false,
           "direct_meters" : null,
-          "action_ids" : [2, 4, 0],
-          "actions" : ["MyIngress.drop", "MyIngress.set_ecmp_select", "NoAction"],
-          "base_default_next" : "MyIngress.ecmp_nhop",
-          "next_tables" : {
-            "MyIngress.drop" : "MyIngress.ecmp_nhop",
-            "MyIngress.set_ecmp_select" : "MyIngress.ecmp_nhop",
-            "NoAction" : "MyIngress.ecmp_nhop"
-          },
-          "default_entry" : {
-            "action_id" : 0,
-            "action_const" : false,
-            "action_data" : [],
-            "action_entry_const" : false
-          }
-        },
-        {
-          "name" : "MyIngress.ecmp_nhop",
-          "id" : 1,
-          "source_info" : {
-            "filename" : "load_balance.p4.sw",
-            "line" : 131,
-            "column" : 10,
-            "source_fragment" : "ecmp_nhop"
-          },
-          "key" : [
-            {
-              "match_type" : "exact",
-              "name" : "meta.ecmp_select",
-              "target" : ["scalars", "metadata.ecmp_select"],
-              "mask" : null
-            }
-          ],
-          "match_type" : "exact",
-          "type" : "simple",
-          "max_size" : 2,
-          "with_counters" : false,
-          "support_timeout" : false,
-          "direct_meters" : null,
-          "action_ids" : [3, 5, 1],
-          "actions" : ["MyIngress.drop", "MyIngress.set_nhop", "NoAction"],
+          "action_ids" : [5, 3, 1],
+          "actions" : ["MyIngress.ipv4_forward", "MyIngress.drop", "NoAction"],
           "base_default_next" : null,
           "next_tables" : {
+            "MyIngress.ipv4_forward" : null,
             "MyIngress.drop" : null,
-            "MyIngress.set_nhop" : null,
             "NoAction" : null
           },
           "default_entry" : {
-            "action_id" : 1,
+            "action_id" : 3,
             "action_const" : false,
             "action_data" : [],
             "action_entry_const" : false
@@ -708,47 +800,50 @@
       "action_profiles" : [],
       "conditionals" : [
         {
-          "name" : "node_2",
+          "name" : "node_3",
           "id" : 0,
           "source_info" : {
             "filename" : "load_balance.p4.sw",
-            "line" : 142,
-            "column" : 12,
-            "source_fragment" : "hdr.ipv4.isValid() && hdr.ipv4.ttl > 0"
+            "line" : 178,
+            "column" : 11,
+            "source_fragment" : "hdr.wecmp.isValid()"
           },
           "expression" : {
             "type" : "expression",
             "value" : {
-              "op" : "and",
-              "left" : {
-                "type" : "expression",
-                "value" : {
-                  "op" : "d2b",
-                  "left" : null,
-                  "right" : {
-                    "type" : "field",
-                    "value" : ["ipv4", "$valid$"]
-                  }
-                }
-              },
+              "op" : "d2b",
+              "left" : null,
               "right" : {
-                "type" : "expression",
-                "value" : {
-                  "op" : ">",
-                  "left" : {
-                    "type" : "field",
-                    "value" : ["ipv4", "ttl"]
-                  },
-                  "right" : {
-                    "type" : "hexstr",
-                    "value" : "0x00"
-                  }
-                }
+                "type" : "field",
+                "value" : ["wecmp", "$valid$"]
+              }
+            }
+          },
+          "true_next" : "tbl_act",
+          "false_next" : "node_6"
+        },
+        {
+          "name" : "node_6",
+          "id" : 1,
+          "source_info" : {
+            "filename" : "load_balance.p4.sw",
+            "line" : 186,
+            "column" : 17,
+            "source_fragment" : "hdr.ipv4.isValid()"
+          },
+          "expression" : {
+            "type" : "expression",
+            "value" : {
+              "op" : "d2b",
+              "left" : null,
+              "right" : {
+                "type" : "field",
+                "value" : ["ipv4", "$valid$"]
               }
             }
           },
           "false_next" : null,
-          "true_next" : "MyIngress.ecmp_group"
+          "true_next" : "MyIngress.ipv4_lpm"
         }
       ]
     },
@@ -757,51 +852,12 @@
       "id" : 1,
       "source_info" : {
         "filename" : "load_balance.p4.sw",
-        "line" : 153,
+        "line" : 196,
         "column" : 8,
         "source_fragment" : "MyEgress"
       },
-      "init_table" : "MyEgress.send_frame",
-      "tables" : [
-        {
-          "name" : "MyEgress.send_frame",
-          "id" : 2,
-          "source_info" : {
-            "filename" : "load_balance.p4.sw",
-            "line" : 163,
-            "column" : 10,
-            "source_fragment" : "send_frame"
-          },
-          "key" : [
-            {
-              "match_type" : "exact",
-              "name" : "standard_metadata.egress_port",
-              "target" : ["standard_metadata", "egress_port"],
-              "mask" : null
-            }
-          ],
-          "match_type" : "exact",
-          "type" : "simple",
-          "max_size" : 256,
-          "with_counters" : false,
-          "support_timeout" : false,
-          "direct_meters" : null,
-          "action_ids" : [7, 8, 6],
-          "actions" : ["MyEgress.rewrite_mac", "MyEgress.drop", "NoAction"],
-          "base_default_next" : null,
-          "next_tables" : {
-            "MyEgress.rewrite_mac" : null,
-            "MyEgress.drop" : null,
-            "NoAction" : null
-          },
-          "default_entry" : {
-            "action_id" : 6,
-            "action_const" : false,
-            "action_data" : [],
-            "action_entry_const" : false
-          }
-        }
-      ],
+      "init_table" : null,
+      "tables" : [],
       "action_profiles" : [],
       "conditionals" : []
     }
@@ -812,13 +868,13 @@
       "id" : 0,
       "source_info" : {
         "filename" : "load_balance.p4.sw",
-        "line" : 184,
+        "line" : 210,
         "column" : 1,
         "source_fragment" : "update_checksum( ..."
       },
       "target" : ["ipv4", "hdrChecksum"],
       "type" : "generic",
-      "calculation" : "calc_0",
+      "calculation" : "calc",
       "verify" : false,
       "update" : true,
       "if_cond" : {

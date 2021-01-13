@@ -7,23 +7,23 @@
       "table": "MyIngress.switch_config_params",
       "action_name": "MyIngress.set_config_parameters",
       "action_params": {
-        "swid": 2
+        "id": 2
       }
     },
     {
-      "table": "MyIngress.tag_id_exact",
+      "table": "MyIngress.output_tag_id_exact",
       "match": {
-        "meta.tag_id": [0]
+        "meta.output_tag_id": [0]
       },
       "action_name": "MyIngress.tag_forward",
       "action_params": {
-        "port": 2
+        "port": 1
       }
     },
     {
-      "table": "MyIngress.tag_id_exact",
+      "table": "MyIngress.output_tag_id_exact",
       "match": {
-        "meta.tag_id": [1]
+        "meta.output_tag_id": [1]
       },
       "action_name": "MyIngress.tag_forward",
       "action_params": {

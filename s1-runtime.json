@@ -7,7 +7,7 @@
       "table": "MyIngress.switch_config_params",
       "action_name": "MyIngress.set_config_parameters",
       "action_params": {
-        "id": 1
+        "id": 0
       }
     },
     {
@@ -44,7 +44,7 @@
       "action_name": "MyIngress.ipv4_forward",
       "action_params": {
         "dstAddr": "08:00:00:00:01:01",
-        "port": 1
+        "port": 3
       }
     },
     {

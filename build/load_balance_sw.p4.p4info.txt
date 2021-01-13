@@ -3,9 +3,25 @@ pkg_info {
 }
 tables {
   preamble {
-    id: 33558969
-    name: "MyIngress.ecmp_group"
-    alias: "ecmp_group"
+    id: 33564783
+    name: "MyIngress.switch_config_params"
+    alias: "switch_config_params"
+  }
+  action_refs {
+    id: 16828790
+  }
+  action_refs {
+    id: 16800567
+    annotations: "@defaultonly"
+    scope: DEFAULT_ONLY
+  }
+  size: 1
+}
+tables {
+  preamble {
+    id: 33574068
+    name: "MyIngress.ipv4_lpm"
+    alias: "ipv4_lpm"
   }
   match_fields {
     id: 1
@@ -14,67 +30,35 @@ tables {
     match_type: LPM
   }
   action_refs {
+    id: 16799317
+  }
+  action_refs {
     id: 16805608
   }
   action_refs {
-    id: 16797669
-  }
-  action_refs {
     id: 16800567
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
   }
   size: 1024
 }
 tables {
   preamble {
-    id: 33608915
-    name: "MyIngress.ecmp_nhop"
-    alias: "ecmp_nhop"
+    id: 33558852
+    name: "MyIngress.output_tag_id_exact"
+    alias: "output_tag_id_exact"
   }
   match_fields {
     id: 1
-    name: "meta.ecmp_select"
-    bitwidth: 14
+    name: "meta.output_tag_id"
+    bitwidth: 8
     match_type: EXACT
   }
   action_refs {
     id: 16805608
   }
   action_refs {
-    id: 16826124
+    id: 16816721
   }
-  action_refs {
-    id: 16800567
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  size: 2
-}
-tables {
-  preamble {
-    id: 33604441
-    name: "MyEgress.send_frame"
-    alias: "send_frame"
-  }
-  match_fields {
-    id: 1
-    name: "standard_metadata.egress_port"
-    bitwidth: 9
-    match_type: EXACT
-  }
-  action_refs {
-    id: 16828148
-  }
-  action_refs {
-    id: 16816924
-  }
-  action_refs {
-    id: 16800567
-    annotations: "@defaultonly"
-    scope: DEFAULT_ONLY
-  }
-  size: 256
+  size: 1024
 }
 actions {
   preamble {
@@ -85,67 +69,50 @@ actions {
 }
 actions {
   preamble {
+    id: 16828790
+    name: "MyIngress.set_config_parameters"
+    alias: "set_config_parameters"
+  }
+  params {
+    id: 1
+    name: "tag_id"
+    bitwidth: 8
+  }
+}
+actions {
+  preamble {
     id: 16805608
     name: "MyIngress.drop"
-    alias: "MyIngress.drop"
+    alias: "drop"
   }
 }
 actions {
   preamble {
-    id: 16797669
-    name: "MyIngress.set_ecmp_select"
-    alias: "set_ecmp_select"
+    id: 16799317
+    name: "MyIngress.ipv4_forward"
+    alias: "ipv4_forward"
   }
   params {
     id: 1
-    name: "ecmp_base"
-    bitwidth: 16
-  }
-  params {
-    id: 2
-    name: "ecmp_count"
-    bitwidth: 32
-  }
-}
-actions {
-  preamble {
-    id: 16826124
-    name: "MyIngress.set_nhop"
-    alias: "set_nhop"
-  }
-  params {
-    id: 1
-    name: "nhop_dmac"
+    name: "dstAddr"
     bitwidth: 48
   }
   params {
     id: 2
-    name: "nhop_ipv4"
-    bitwidth: 32
-  }
-  params {
-    id: 3
     name: "port"
     bitwidth: 9
   }
 }
 actions {
   preamble {
-    id: 16828148
-    name: "MyEgress.rewrite_mac"
-    alias: "rewrite_mac"
+    id: 16816721
+    name: "MyIngress.tag_forward"
+    alias: "tag_forward"
   }
   params {
     id: 1
-    name: "smac"
-    bitwidth: 48
-  }
-}
-actions {
-  preamble {
-    id: 16816924
-    name: "MyEgress.drop"
-    alias: "MyEgress.drop"
+    name: "port"
+    bitwidth: 9
   }
 }
 type_info {

@@ -64,7 +64,7 @@ header wecmp_t{
 struct metadata {
     bit<8> sw_id;
     bit<8> flowlet;
-    bit<8> tag_id;
+    bit<8> output_tag_id;
 }
 
 struct headers {
@@ -127,8 +127,8 @@ control MyIngress(inout headers hdr,
                   inout standard_metadata_t standard_metadata) {
 
     /* config */
-    action set_config_parameters(bit<8> swid) {
-        meta.sw_id = swid;
+    action set_config_parameters(bit<8> id) {
+        meta.sw_id = id;
     }
     table switch_config_params {
         actions = {
@@ -165,78 +165,6 @@ control MyIngress(inout headers hdr,
     register<bit<8>>(MAX_FLOWLET_NUM) path_id_reg;
     register<bit<8>>(PATH_NUM) utilization_reg;  
 
-    /*action set_wecmp_header() {
-        // get flowlet index
-        bit<16> wecmp_base = 0;
-        hash(meta.flowlet, HashAlgorithm.crc16, wecmp_base, 
-	    {hdr.ipv4.srcAddr, hdr.ipv4.dstAddr, hdr.ipv4.protocol, hdr.tcp.srcPort, hdr.tcp.dstPort},
-	    MAX_FLOWLET_NUM);
-            
-        // get lasttime and path id
-        bit<8> path_id;
-        path_id_reg.read(path_id, (bit<32>)meta.flowlet);
-
-        time_t last_time;
-        time_t cur_time = standard_metadata.ingress_global_timestamp;
-        last_time_reg.read(last_time, (bit<32>)meta.flowlet);
-        if(cur_time - last_time > INTERPACKET_GAP){
-            // if it is new flowlet, calculate new path
-            bit<8> selection;
-            bit<8> path_utilization_0;
-            bit<8> path_utilization_1;
-            bit<8> path_utilization_2;
-            bit<8> path_utilization_3;
-            bit<8> count = 0;
-
-            utilization_reg.read(path_utilization_0, 0);
-            count = count + path_utilization_0;
-
-            utilization_reg.read(path_utilization_1, 1);
-            count = count + path_utilization_1;
-            path_utilization_1 = count;
-
-            utilization_reg.read(path_utilization_2, 2);
-            count = count + path_utilization_2;
-            path_utilization_2 = count;
-
-            utilization_reg.read(path_utilization_3, 3);
-            count = count + path_utilization_3;
-            path_utilization_3 = count;
-
-            if(count < 1){
-                random(selection, 0, 3);
-                path_id = selection;
-            }
-            else{
-                random(selection, 1, count);
-                if(selection <= path_utilization_0){
-                    path_id = 0;
-                }
-                else if(selection <= path_utilization_1){
-                    path_id = 1;
-                }
-                else if(selection <= path_utilization_2){
-                    path_id = 2;
-                }
-                else{
-                    path_id = 3;
-                }
-            }
-
-            // write new path id into register, because of change
-            path_id_reg.write((bit<32>)meta.flowlet, path_id);
-        }
-        // write last time into register
-        last_time_reg.write((bit<32>)meta.flowlet, cur_time);
-
-        // setting header
-        hdr.wecmp.src_sw_id = meta.sw_id;
-        hdr.wecmp.selected_path_id = path_id;
-        hdr.wecmp.max_utilization = MAX_UTILIZATION;
-
-        // set ether type
-        hdr.ethernet.etherType = TYPE_WECMP;
-    }*/
     action unset_wecmp_header(){
         // save utilization of path
         utilization_reg.write((bit<32>)hdr.wecmp.tag_path_id, hdr.wecmp.max_utilization);
@@ -253,9 +181,9 @@ control MyIngress(inout headers hdr,
     action tag_forward(egressSpec_t port){
         standard_metadata.egress_spec = port;
     }
-    table tag_id_exact {
+    table output_tag_id_exact {
         key = {
-            meta.tag_id: exact;
+            meta.output_tag_id: exact;
         }
         actions = {
             drop;
@@ -344,7 +272,8 @@ control MyIngress(inout headers hdr,
 
                 // send by tag
                 hdr.ethernet.etherType = TYPE_WECMP;
-                tag_id_exact.apply();
+                meta.output_tag_id = hdr.wecmp.selected_path_id & 1;
+                output_tag_id_exact.apply();
             }
             // send to host
             else{

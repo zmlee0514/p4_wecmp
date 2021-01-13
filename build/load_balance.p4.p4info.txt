@@ -42,13 +42,13 @@ tables {
 }
 tables {
   preamble {
-    id: 33600069
-    name: "MyIngress.tag_id_exact"
-    alias: "tag_id_exact"
+    id: 33558852
+    name: "MyIngress.output_tag_id_exact"
+    alias: "output_tag_id_exact"
   }
   match_fields {
     id: 1
-    name: "meta.tag_id"
+    name: "meta.output_tag_id"
     bitwidth: 8
     match_type: EXACT
   }
@@ -75,7 +75,7 @@ actions {
   }
   params {
     id: 1
-    name: "swid"
+    name: "id"
     bitwidth: 8
   }
 }

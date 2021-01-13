@@ -2,9 +2,17 @@
 #include <core.p4>
 #include <v1model.p4>
 
+// NOTE: new type added here
+const bit<16> TYPE_WECMP = 0x1234;
+const bit<16> TYPE_IPV4 = 0x800;
+
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
+typedef bit<9>  egressSpec_t;
+typedef bit<48> macAddr_t;
+typedef bit<32> ip4Addr_t;
+typedef bit<48> time_t;
 
 header ethernet_t {
     bit<48> dstAddr;
@@ -41,14 +49,23 @@ header tcp_t {
     bit<16> urgentPtr;
 }
 
+header wecmp_t{
+    bit<8> src_sw_id;
+    bit<8> selected_path_id;
+    bit<8> tag_path_id;
+    bit<8> max_utilization;
+}
+
 struct metadata {
-    bit<14> ecmp_select;
+    bit<8> tag_id;
+    bit<8> output_tag_id;
 }
 
 struct headers {
     ethernet_t ethernet;
     ipv4_t     ipv4;
     tcp_t      tcp;
+    wecmp_t    wecmp;
 }
 
 /*************************************************************************
@@ -66,9 +83,14 @@ parser MyParser(packet_in packet,
     state parse_ethernet {
         packet.extract(hdr.ethernet);
         transition select(hdr.ethernet.etherType) {
-            0x800: parse_ipv4;
+            TYPE_IPV4: parse_ipv4;
+            TYPE_WECMP: parse_wecmp;
             default: accept;
         }
+    }
+    state parse_wecmp {
+        packet.extract(hdr.wecmp);
+        transition parse_ipv4;
     }
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
@@ -98,50 +120,71 @@ control MyVerifyChecksum(inout headers hdr, inout metadata meta) {
 control MyIngress(inout headers hdr,
                   inout metadata meta,
                   inout standard_metadata_t standard_metadata) {
+    
+    /* config */
+    action set_config_parameters(bit<8> tag_id) {
+        meta.tag_id = tag_id;
+    }
+    table switch_config_params {
+        actions = {
+            set_config_parameters;
+        }
+        size = 1;
+    }
+
+    /* for ipv4 */
     action drop() {
         mark_to_drop(standard_metadata);
     }
-    action set_ecmp_select(bit<16> ecmp_base, bit<32> ecmp_count) {
-        hash(meta.ecmp_select,
-	    HashAlgorithm.crc16,
-	    ecmp_base,
-	    { hdr.ipv4.srcAddr,
-	      hdr.ipv4.dstAddr,
-              hdr.ipv4.protocol,
-              hdr.tcp.srcPort,
-              hdr.tcp.dstPort },
-	    ecmp_count);
-    }
-    action set_nhop(bit<48> nhop_dmac, bit<32> nhop_ipv4, bit<9> port) {
-        hdr.ethernet.dstAddr = nhop_dmac;
-        hdr.ipv4.dstAddr = nhop_ipv4;
+    action ipv4_forward(macAddr_t dstAddr, egressSpec_t port) {
         standard_metadata.egress_spec = port;
+        hdr.ethernet.srcAddr = hdr.ethernet.dstAddr;
+        hdr.ethernet.dstAddr = dstAddr;
         hdr.ipv4.ttl = hdr.ipv4.ttl - 1;
     }
-    table ecmp_group {
+    table ipv4_lpm {
         key = {
             hdr.ipv4.dstAddr: lpm;
         }
         actions = {
+            ipv4_forward;
             drop;
-            set_ecmp_select;
+            NoAction;
         }
         size = 1024;
+        default_action = drop();
     }
-    table ecmp_nhop {
+
+    /* for wecmp */
+    action tag_forward(egressSpec_t port){
+        standard_metadata.egress_spec = port;
+    }
+    table output_tag_id_exact {
         key = {
-            meta.ecmp_select: exact;
+            meta.output_tag_id: exact;
         }
         actions = {
             drop;
-            set_nhop;
+            tag_forward;
         }
-        size = 2;
+        size = 1024;
+        default_action = drop();
     }
+
     apply {
-        if (hdr.ipv4.isValid() && hdr.ipv4.ttl > 0) {
-            ecmp_group.apply();
-            ecmp_nhop.apply();
+        // configure
+        switch_config_params.apply();
+
+        if(hdr.wecmp.isValid()){
+            // get path id
+            bit<8> output_id;
+            output_id = hdr.wecmp.selected_path_id >> 1;
+            output_id = output_id & 1;
+            meta.output_tag_id = output_id;
+            output_tag_id_exact.apply();
+        }
+        else if (hdr.ipv4.isValid()) {
+            ipv4_lpm.apply();
         }
     }
 }
@@ -153,25 +196,8 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-    
-    action rewrite_mac(bit<48> smac) {
-        hdr.ethernet.srcAddr = smac;
-    }
-    action drop() {
-        mark_to_drop(standard_metadata);
-    }
-    table send_frame {
-        key = {
-            standard_metadata.egress_port: exact;
-        }
-        actions = {
-            rewrite_mac;
-            drop;
-        }
-        size = 256;
-    }
     apply {
-        send_frame.apply();
+        
     }
 }
 
