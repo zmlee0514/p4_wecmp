@@ -288,7 +288,7 @@ control MyEgress(inout headers hdr,
             // bandwidth = 1Mbps, that is 1bit / 1ms will be the top rank(weight = 0)
             // ingress_byte is in byte unit, so << 3
             // we need 8 rank, so << more 3 bit, or we can >> duration 3 bit
-            ingress_byte = ingress_byte << 6;
+            ingress_byte = ingress_byte << 3;
 
             if(duration > ingress_byte){
                 weight = 8;

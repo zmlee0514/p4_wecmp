@@ -294,9 +294,6 @@ control MyIngress(inout headers hdr,
     apply {
         // configure
         switch_config_params.apply();
-
-        // record bytes
-        record_bytes();
     
         if (hdr.wecmp.isValid()) {
             // from host
@@ -385,6 +382,9 @@ control MyIngress(inout headers hdr,
         else if(hdr.ipv4.isValid()){
             ipv4_lpm.apply();
         }
+
+        // record bytes
+        record_bytes();
     }
 }
 
