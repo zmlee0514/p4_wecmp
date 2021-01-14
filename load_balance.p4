@@ -9,7 +9,8 @@ const bit<32> MAX_FLOWLET_NUM = 16;
 
 #define PATH_NUM 4
 #define INTERPACKET_GAP 20000
-#define MAX_UTILIZATION 4
+#define MAX_UTILIZATION 8
+#define MAX_PORTS 3
 
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
@@ -59,6 +60,7 @@ header wecmp_t{
     bit<8> selected_path_id;
     bit<8> tag_path_id;
     bit<8> max_utilization;
+    bit<48> byte;
 }
 
 struct metadata {
@@ -165,7 +167,103 @@ control MyIngress(inout headers hdr,
     register<bit<8>>(MAX_FLOWLET_NUM) path_id_reg;
     register<bit<8>>(PATH_NUM) utilization_reg;  
 
+    // for counting byte and utilization
+    register<bit<48>>(MAX_PORTS) byte_cnt_reg;
+    register<time_t>(MAX_PORTS) last_time_cnt_reg;
+
+    action record_bytes(){
+        bit<48> byte_cnt;
+        // record output packet bytes into the index of output port
+        byte_cnt_reg.read(byte_cnt, (bit<32>)standard_metadata.egress_port);
+        byte_cnt = byte_cnt + (bit<48>)standard_metadata.packet_length;
+        byte_cnt_reg.write((bit<32>)standard_metadata.egress_port, byte_cnt);
+    }
+
     action unset_wecmp_header(){
+        bit<48> byte_cnt;
+        bit<48> ingress_byte;
+        bit<8> weight = 0;
+        time_t last_time;
+        time_t duration;
+
+        // read byte count of input port, get reset to 0
+        byte_cnt_reg.read(ingress_byte, (bit<32>)standard_metadata.ingress_port);
+        byte_cnt_reg.write((bit<32>)standard_metadata.ingress_port, 0);
+
+        // get duration
+        time_t cur_time = standard_metadata.ingress_global_timestamp;
+        last_time_cnt_reg.read(last_time, (bit<32>)standard_metadata.ingress_port);
+        last_time_cnt_reg.write((bit<32>)standard_metadata.ingress_port, cur_time);
+        duration = cur_time - last_time; // in micro second
+
+        // bandwidth = 1Mbps, that is 1bit / 1ms will be the top rank(weight = 0)
+        // ingress_byte is in byte unit, so << 3
+        // we need 8 rank, so << more 3 bit, or we can >> duration 3 bit
+        ingress_byte = ingress_byte << 6;
+
+        if(duration > ingress_byte){
+            weight = 8;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 7;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 6;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 5;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 4;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 3;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 2;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+        if(duration > ingress_byte){
+            weight = 1;
+            duration = 0; // let it not to grater than ingress_byte afterward
+        }
+        else{
+            ingress_byte = ingress_byte - duration;
+        }
+
+        // more larger the weight is, the utilization will be more less. 
+        // record the less one of the weight
+        if(hdr.wecmp.max_utilization > weight){
+            hdr.wecmp.max_utilization = weight;
+        }
+
         // save utilization of path
         utilization_reg.write((bit<32>)hdr.wecmp.tag_path_id, hdr.wecmp.max_utilization);
 
@@ -196,6 +294,9 @@ control MyIngress(inout headers hdr,
     apply {
         // configure
         switch_config_params.apply();
+
+        // record bytes
+        record_bytes();
     
         if (hdr.wecmp.isValid()) {
             // from host
@@ -294,13 +395,8 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
-
-    action copy(){
-        clone3(CloneType.I2E, (bit<32>)32w250, { standard_metadata });
-    }
     
     apply {
-        //copy();
     }
 }
 

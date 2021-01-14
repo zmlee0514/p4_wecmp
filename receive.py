@@ -21,18 +21,6 @@ def get_if():
         exit(1)
     return iface
 
-class IPOption_MRI(IPOption):
-    name = "MRI"
-    option = 31
-    fields_desc = [ _IPOption_HDR,
-                    FieldLenField("length", None, fmt="B",
-                                  length_of="swids",
-                                  adjust=lambda pkt,l:l+4),
-                    ShortField("count", 0),
-                    FieldListField("swids",
-                                   [],
-                                   IntField("", 0),
-                                   length_from=lambda pkt:pkt.count*4) ]
 def handle_pkt(pkt):
     if WECMP in pkt or (TCP in pkt and pkt[TCP].dport == 1234):
         print "got a packet"
@@ -45,7 +33,8 @@ class WECMP(Packet):
     fields_desc = [ BitField("src_sw_id", 0, 8),
                     BitField("selected_path_id", 0, 8),
                     BitField("tag_path_id", 0, 8),
-                    BitField("max_utilization", 0, 8)]
+                    BitField("max_utilization", 0, 8),
+                    BitField("bytes", 0, 48)]
     def mysummary(self):
         return self.sprintf("src_sw_id=%src_sw_id%, selected_path_id=%selected_path_id%, tag_path_id=%tag_path_id%, max_utilization=%max_utilization%")
 

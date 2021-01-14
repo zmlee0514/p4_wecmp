@@ -265,4 +265,5 @@ def main(p4info_file_path_sw, bmv2_file_path_sw, p4info_file_path_tor, bmv2_file
 if __name__ == '__main__':
     os.system("sudo chown p4.p4 logs/*");
     os.system("p4c-bm2-ss --p4v 16 --p4runtime-files build/load_balance_sw.p4.p4info.txt -o build/load_balance_sw.json load_balance.p4.sw");
+    os.system("p4c-bm2-ss --p4v 16 --p4runtime-files build/load_balance.p4.p4info.txt -o build/load_balance.json load_balance.p4");
     main("build/load_balance_sw.p4.p4info.txt", "build/load_balance_sw.json", "build/load_balance.p4.p4info.txt", "build/load_balance.json")

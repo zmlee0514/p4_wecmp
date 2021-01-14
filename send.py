@@ -27,7 +27,8 @@ class WECMP(Packet):
     fields_desc = [ BitField("src_sw_id", 0, 8),
                     BitField("selected_path_id", 0, 8),
                     BitField("tag_path_id", 0, 8),
-                    BitField("max_utilization", 0, 8)]
+                    BitField("max_utilization", 0, 8),
+                    BitField("bytes", 0, 48)]
     def mysummary(self):
         return self.sprintf("src_sw_id=%src_sw_id%, selected_path_id=%selected_path_id%, tag_path_id=%tag_path_id%, max_utilization=%max_utilization%")
 

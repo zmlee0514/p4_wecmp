@@ -6,6 +6,7 @@
 const bit<16> TYPE_WECMP = 0x1234;
 const bit<16> TYPE_IPV4 = 0x800;
 
+#define MAX_PORTS 3
 /*************************************************************************
 *********************** H E A D E R S  ***********************************
 *************************************************************************/
@@ -54,6 +55,7 @@ header wecmp_t{
     bit<8> selected_path_id;
     bit<8> tag_path_id;
     bit<8> max_utilization;
+    bit<48> bytes;
 }
 
 struct metadata {
@@ -173,13 +175,19 @@ control MyIngress(inout headers hdr,
         default_action = drop();
     }
 
-    action get_path_id(){
+    action header_process(){
         // get path id
-        bit<8> output_id;
-        output_id = hdr.wecmp.selected_path_id;
-        output_id = output_id >> 1;
-        output_id = output_id & 1;
-        meta.output_tag_id = output_id;
+        hdr.wecmp.selected_path_id = hdr.wecmp.selected_path_id >> 1;
+        meta.output_tag_id = hdr.wecmp.selected_path_id & 1;
+
+        // record tag path id
+        hdr.wecmp.tag_path_id = hdr.wecmp.tag_path_id << 1;
+        hdr.wecmp.tag_path_id = hdr.wecmp.tag_path_id | meta.tag_id;
+
+        // set utlization
+        /*bit<8> utilization;
+        random(utilization, 0, 8);
+        hdr.wecmp.max_utilization = utilization;*/
     }
 
     /*action tor_forward(port){
@@ -217,20 +225,21 @@ control MyIngress(inout headers hdr,
         if(hdr.wecmp.isValid()){
             // sent to TOR
             if(meta.position == 2){
+                header_process();
                 if(hdr.wecmp.src_sw_id == 1){
                     standard_metadata.egress_spec = 3;
                 }
                 else{
-                    get_path_id();
                     output_tag_id_exact.apply();
                 }
             }
+            // send to sw
             else if(meta.position == 1){
+                header_process();
                 if(hdr.wecmp.src_sw_id == 2){
                     standard_metadata.egress_spec = 3;
                 }
                 else{
-                    get_path_id();
                     output_tag_id_exact.apply();
                 }
             }
@@ -248,8 +257,102 @@ control MyIngress(inout headers hdr,
 control MyEgress(inout headers hdr,
                  inout metadata meta,
                  inout standard_metadata_t standard_metadata) {
+
+    register<bit<48>>(MAX_PORTS) byte_cnt_reg;
+    register<time_t>(MAX_PORTS) last_time_reg;
+
     apply {
-        
+        bit<48> byte_cnt;
+        bit<48> ingress_byte;
+        bit<8> weight = 0;
+        time_t last_time;
+        time_t duration;
+
+        // record output packet bytes into the index of output port
+        byte_cnt_reg.read(byte_cnt, (bit<32>)standard_metadata.egress_port);
+        byte_cnt = byte_cnt + (bit<48>)standard_metadata.packet_length;
+        byte_cnt_reg.write((bit<32>)standard_metadata.egress_port, byte_cnt);
+
+        // if there is wecmp header, get utilization info
+        if(hdr.wecmp.isValid()){
+            // read byte count of input port, get reset to 0
+	        byte_cnt_reg.read(ingress_byte, (bit<32>)standard_metadata.ingress_port);
+	        byte_cnt_reg.write((bit<32>)standard_metadata.ingress_port, 0);
+
+            // get duration
+            time_t cur_time = standard_metadata.ingress_global_timestamp;
+            last_time_reg.read(last_time, (bit<32>)standard_metadata.ingress_port);
+	        last_time_reg.write((bit<32>)standard_metadata.ingress_port, cur_time);
+            duration = cur_time - last_time; // in micro second
+            
+            // bandwidth = 1Mbps, that is 1bit / 1ms will be the top rank(weight = 0)
+            // ingress_byte is in byte unit, so << 3
+            // we need 8 rank, so << more 3 bit, or we can >> duration 3 bit
+            ingress_byte = ingress_byte << 6;
+
+            if(duration > ingress_byte){
+                weight = 8;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 7;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 6;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 5;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 4;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 3;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 2;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+            if(duration > ingress_byte){
+                weight = 1;
+                duration = 0; // let it not to grater than ingress_byte afterward
+            }
+            else{
+                ingress_byte = ingress_byte - duration;
+            }
+
+            // more larger the weight is, the utilization will be more less. 
+            // record the less one of the weight
+            if(hdr.wecmp.max_utilization > weight){
+                hdr.wecmp.max_utilization = weight;
+            }
+        }
     }
 }
 
